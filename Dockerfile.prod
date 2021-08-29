@@ -1,0 +1,55 @@
+FROM ruby:2.7.3
+
+RUN apt-get update -qq && apt-get install -y build-essential libpq-dev nodejs && rm -rf /var/lib/apt/lists/*
+
+
+RUN curl https://deb.nodesource.com/setup_12.x | bash
+RUN curl https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+
+RUN apt-get update && apt-get install -y nodejs yarn postgresql-client
+
+
+# App specific installations are run separatelly so previous is a rehused container
+RUN apt-get install -y imagemagick && rm -rf /var/lib/apt/lists/*
+
+ENV APP_HOME /app
+RUN mkdir -p $APP_HOME
+WORKDIR $APP_HOME
+
+COPY Gemfile Gemfile.lock ./
+RUN gem install bundler && bundle install --jobs 20 --retry 5 --without development test
+
+ARG ASSET_HOST
+
+# Set Rails to run in production
+ENV RAILS_ENV production
+# allow the app to serve static files which is otherwise disabled by default
+ENV RAILS_SERVE_STATIC_FILES true
+ENV RACK_ENV production
+# set to log to standard out instead of a file.
+ENV RAILS_LOG_TO_STDOUT true
+
+COPY . ./
+
+# Precompile Rails assets. We set a dummy secret key
+# RUN bundle exec rake SECRET_KEY_BASE=pickasecuretoken
+# RUN RAILS_ENV=production bundle exec rake assets:precompile
+# RUN bin/rails assets:precompile
+
+# RUN bundle exec rake RAILS_ENV=production assets:precompile
+
+# RUN RAILS_ENV=production SECRET_KEY_BASE=pickasecuretoken bundle exec rails assets:precompile
+
+# RUN bundle exec assets:precompile
+
+
+RUN bundle exec rake RAILS_ENV=production SECRET_KEY_BASE=98ac23fbac05280c5c20337b6a91c829be9ad17db631bd188ae46b86cf95a745d91c4d03038f0ffce9a6b932875cc7b4604b76ef34adfdf82bfef522a35692b9 assets:precompile
+
+
+# RUN bundle exec rake SECRET_KEY_BASE=526fdbf302a96534d8e9829963321878b48919cf97d313afc00c479acfb436187d8ca7f005e981b04e8ff1c817730bf5151949da73779e7f40918ab9cfc61cbf ASSET_HOST=${ASSET_HOST} RAILS_ENV=production assets:precompile
+
+# VOLUME ["$RAILS_ROOT/public"]
+# CMD ["bin/bundle", "exec", "puma"]
+
+# CMD bundle exec unicorn -c config/unicorn.rb
